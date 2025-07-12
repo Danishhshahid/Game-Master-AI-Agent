@@ -20,7 +20,7 @@ DEFAULT_GAME_STATE = {
     "location": "village",
     "in_combat": False,
     "enemy": None,
-    "current_agent": "story_agent"
+    "current_agent": "NarratorAgent"
 }
 
 # Tool functions
@@ -42,26 +42,26 @@ def generate_event():
     return random.choice(events)
 
 # Agent functions
-async def story_agent(player_action: str, game_state: Dict[str, Any], conversation_history: Dict) -> tuple:
+async def NarratorAgent(player_action: str, game_state: Dict[str, Any], conversation_history: Dict) -> tuple:
     """Handles story and exploration"""
     
     # Check if player wants to give custom prompt
     if player_action.lower().startswith("prompt:"):
         custom_prompt = player_action[7:].strip()
         
-        conversation_history["story_agent"].append({"role": "user", "content": custom_prompt})
+        conversation_history["NarratorAgent"].append({"role": "user", "content": custom_prompt})
         
         response = await litellm.acompletion(
             model="gemini/gemini-1.5-flash",
-            messages=conversation_history["story_agent"],
+            messages=conversation_history["NarratorAgent"],
             temperature=0.7,
             api_key=os.getenv("GOOGLE_API_KEY")
         )
         
         ai_response = response.choices[0].message.content
-        conversation_history["story_agent"].append({"role": "assistant", "content": ai_response})
+        conversation_history["NarratorAgent"].append({"role": "assistant", "content": ai_response})
         
-        return f"🤖 **AI Response:** {ai_response}", "story_agent"
+        return f"🤖 **AI Response:** {ai_response}", "NarratorAgent"
     
     # Normal game flow
     event = generate_event()
@@ -76,17 +76,17 @@ async def story_agent(player_action: str, game_state: Dict[str, Any], conversati
     Write 2-3 sentences about what happens next. Keep it simple and fun!
     """
     
-    conversation_history["story_agent"].append({"role": "user", "content": prompt})
+    conversation_history["NarratorAgent"].append({"role": "user", "content": prompt})
     
     response = await litellm.acompletion(
         model="gemini/gemini-1.5-flash",
-        messages=conversation_history["story_agent"][-5:],
+        messages=conversation_history["NarratorAgent"][-5:],
         temperature=0.7,
         api_key=os.getenv("GOOGLE_API_KEY")
     )
     
     story = response.choices[0].message.content
-    conversation_history["story_agent"].append({"role": "assistant", "content": story})
+    conversation_history["NarratorAgent"].append({"role": "assistant", "content": story})
     
     result = f"📖 **Event:** {event['description']}\n\n📚 **Story:** {story}"
     
@@ -94,33 +94,33 @@ async def story_agent(player_action: str, game_state: Dict[str, Any], conversati
     if event["type"] == "monster":
         game_state["in_combat"] = True
         game_state["enemy"] = event["name"]
-        return result + "\n\n⚔️ **Combat initiated!**", "combat_agent"
+        return result + "\n\n⚔️ **Combat initiated!**", "MonsterAgent"
     elif event["type"] == "treasure":
         game_state["inventory"].append(event["item"])
-        return result + f"\n\n🎒 **Added {event['item']} to inventory!**", "item_agent"
+        return result + f"\n\n🎒 **Added {event['item']} to inventory!**", "ItemAgent"
     else:
-        return result, "story_agent"
+        return result, "NarratorAgent"
 
-async def combat_agent(player_action: str, game_state: Dict[str, Any], conversation_history: Dict) -> tuple:
+async def MonsterAgent(player_action: str, game_state: Dict[str, Any], conversation_history: Dict) -> tuple:
     """Handles fighting monsters"""
     
     # Check if player wants to give custom prompt
     if player_action.lower().startswith("prompt:"):
         custom_prompt = player_action[7:].strip()
         
-        conversation_history["combat_agent"].append({"role": "user", "content": custom_prompt})
+        conversation_history["MonsterAgent"].append({"role": "user", "content": custom_prompt})
         
         response = await litellm.acompletion(
             model="gemini/gemini-1.5-flash",
-            messages=conversation_history["combat_agent"],
+            messages=conversation_history["MonsterAgent"],
             temperature=0.7,
             api_key=os.getenv("GOOGLE_API_KEY")
         )
         
         ai_response = response.choices[0].message.content
-        conversation_history["combat_agent"].append({"role": "assistant", "content": ai_response})
+        conversation_history["MonsterAgent"].append({"role": "assistant", "content": ai_response})
         
-        return f"🤖 **AI Response:** {ai_response}", "combat_agent"
+        return f"🤖 **AI Response:** {ai_response}", "MonsterAgent"
     
     # Normal combat flow
     player_roll = roll_dice()
@@ -137,17 +137,17 @@ async def combat_agent(player_action: str, game_state: Dict[str, Any], conversat
     If enemy_roll > player_roll, player takes damage.
     """
     
-    conversation_history["combat_agent"].append({"role": "user", "content": prompt})
+    conversation_history["MonsterAgent"].append({"role": "user", "content": prompt})
     
     response = await litellm.acompletion(
         model="gemini/gemini-1.5-flash",
-        messages=conversation_history["combat_agent"][-5:],
+        messages=conversation_history["MonsterAgent"][-5:],
         temperature=0.7,
         api_key=os.getenv("GOOGLE_API_KEY")
     )
     
     combat_story = response.choices[0].message.content
-    conversation_history["combat_agent"].append({"role": "assistant", "content": combat_story})
+    conversation_history["MonsterAgent"].append({"role": "assistant", "content": combat_story})
     
     result = f"🎲 **Your roll:** {player_roll} | **Enemy roll:** {enemy_roll}\n\n⚔️ **Combat:** {combat_story}"
     
@@ -156,35 +156,35 @@ async def combat_agent(player_action: str, game_state: Dict[str, Any], conversat
         result += "\n\n✅ **You won the fight!**"
         game_state["in_combat"] = False
         game_state["enemy"] = None
-        return result, "story_agent"
+        return result, "NarratorAgent"
     else:
         game_state["health"] -= 20
         result += f"\n\n❤️ **You took damage! Health: {game_state['health']}**"
         if game_state["health"] <= 0:
             result += "\n\n💀 **Game Over!**"
             return result, "game_over"
-        return result, "combat_agent"
+        return result, "MonsterAgent"
 
-async def item_agent(player_action: str, game_state: Dict[str, Any], conversation_history: Dict) -> tuple:
+async def ItemAgent(player_action: str, game_state: Dict[str, Any], conversation_history: Dict) -> tuple:
     """Handles items and inventory"""
     
     # Check if player wants to give custom prompt
     if player_action.lower().startswith("prompt:"):
         custom_prompt = player_action[7:].strip()
         
-        conversation_history["item_agent"].append({"role": "user", "content": custom_prompt})
+        conversation_history["ItemAgent"].append({"role": "user", "content": custom_prompt})
         
         response = await litellm.acompletion(
             model="gemini/gemini-1.5-flash",
-            messages=conversation_history["item_agent"],
+            messages=conversation_history["ItemAgent"],
             temperature=0.7,
             api_key=os.getenv("GOOGLE_API_KEY")
         )
         
         ai_response = response.choices[0].message.content
-        conversation_history["item_agent"].append({"role": "assistant", "content": ai_response})
+        conversation_history["ItemAgent"].append({"role": "assistant", "content": ai_response})
         
-        return f"🤖 **AI Response:** {ai_response}", "item_agent"
+        return f"🤖 **AI Response:** {ai_response}", "ItemAgent"
     
     # Normal item flow
     item_roll = roll_dice()
@@ -198,17 +198,17 @@ async def item_agent(player_action: str, game_state: Dict[str, Any], conversatio
     Write 2-3 sentences about the item they found. If roll > 10, it's a great item!
     """
     
-    conversation_history["item_agent"].append({"role": "user", "content": prompt})
+    conversation_history["ItemAgent"].append({"role": "user", "content": prompt})
     
     response = await litellm.acompletion(
         model="gemini/gemini-1.5-flash",
-        messages=conversation_history["item_agent"][-5:],
+        messages=conversation_history["ItemAgent"][-5:],
         temperature=0.7,
         api_key=os.getenv("GOOGLE_API_KEY")
     )
     
     item_story = response.choices[0].message.content
-    conversation_history["item_agent"].append({"role": "assistant", "content": item_story})
+    conversation_history["ItemAgent"].append({"role": "assistant", "content": item_story})
     
     result = f"🎲 **Item roll:** {item_roll}\n\n🎒 **Item Discovery:** {item_story}"
     
@@ -217,7 +217,7 @@ async def item_agent(player_action: str, game_state: Dict[str, Any], conversatio
         game_state["health"] = min(100, game_state["health"] + 30)
         result += f"\n\n✨ **You feel better! Health: {game_state['health']}**"
     
-    return result, "story_agent"
+    return result, "NarratorAgent"
 
 # Chainlit event handlers
 @cl.on_chat_start
@@ -226,9 +226,9 @@ async def start():
     # Initialize game state and conversation history
     cl.user_session.set("game_state", DEFAULT_GAME_STATE.copy())
     cl.user_session.set("conversation_history", {
-        "story_agent": [],
-        "combat_agent": [],
-        "item_agent": []
+        "NarratorAgent": [],
+        "MonsterAgent": [],
+        "ItemAgent": []
     })
     
     welcome_message = """
@@ -297,9 +297,9 @@ async def main(message: cl.Message):
         # Reset game state
         cl.user_session.set("game_state", DEFAULT_GAME_STATE.copy())
         cl.user_session.set("conversation_history", {
-            "story_agent": [],
-            "combat_agent": [],
-            "item_agent": []
+            "NarratorAgent": [],
+            "MonsterAgent": [],
+            "ItemAgent": []
         })
         await cl.Message(content="🔄 **Game restarted!** Your adventure begins anew in the village.").send()
         return
@@ -313,12 +313,12 @@ async def main(message: cl.Message):
         await thinking_msg.send()
         
         # Call appropriate agent
-        if current_agent == "story_agent":
-            result, next_agent = await story_agent(user_input, game_state, conversation_history)
-        elif current_agent == "combat_agent":
-            result, next_agent = await combat_agent(user_input, game_state, conversation_history)
-        elif current_agent == "item_agent":
-            result, next_agent = await item_agent(user_input, game_state, conversation_history)
+        if current_agent == "NarratorAgent":
+            result, next_agent = await NarratorAgent(user_input, game_state, conversation_history)
+        elif current_agent == "MonsterAgent":
+            result, next_agent = await MonsterAgent(user_input, game_state, conversation_history)
+        elif current_agent == "ItemAgent":
+            result, next_agent = await ItemAgent(user_input, game_state, conversation_history)
         else:
             result = "💀 **Game Over!** Type `restart` to play again."
             next_agent = "game_over"
@@ -341,3 +341,4 @@ async def main(message: cl.Message):
         
     except Exception as e:
         await cl.Message(content=f"❌ **Error:** {str(e)}\n\nMake sure your GOOGLE_API_KEY is set correctly!").send()
+
