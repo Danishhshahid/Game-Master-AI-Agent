@@ -341,11 +341,3 @@ async def main(message: cl.Message):
         
     except Exception as e:
         await cl.Message(content=f"❌ **Error:** {str(e)}\n\nMake sure your GOOGLE_API_KEY is set correctly!").send()
-
-if __name__ == "__main__":
-    # Instructions for running
-    print("🚀 To run this game:")
-    print("1. Install dependencies: pip install chainlit litellm")
-    print("2. Set your Google API key: export GOOGLE_API_KEY=your_api_key_here")
-    print("3. Run: chainlit run this_file.py")
-    print("4. Open your browser to the URL shown")
